@@ -94,10 +94,21 @@ class MIC21Summarizer(torch.nn.Module):
     def forward(self, img, target_len):
         img_features = self.get_img_features(img)
 
-        visual_embeddings = self.projection_layer(self.projection_dropout(self.projection_norm(img_features.to(f"cuda:{self.in_device}"))))
+        messages = [
+            {"role":"system","content":"Generate title and description for the provided image. The image features are: "},
+            {"role":"user","content":"Generate a title:"}
+                        ]
+        tokenized_messages = self.tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(self.in_device)
+        vectorized_messages = self.llm.model.embed_tokens(tokenized_messages[0]).unsqueeze(0)
+        first_eos_index = (tokenized_messages[0]==2).nonzero()[0].item()
 
-        combined_embeds = torch.cat([self.msg_p1_emb, visual_embeddings.half().to(self.in_device), self.msg_p2_emb],dim=1)
-        
+        visual_embeddings = self.projection_layer(self.projection_dropout(self.projection_norm(img_features.to(f"cuda:{self.in_device}"))))
+        #combined_embeds = torch.cat([self.msg_p1_emb, visual_embeddings.half().to(self.in_device), self.msg_p2_emb],dim=1)
+        combined_embeds = torch.cat([
+            vectorized_messages[:,:first_eos_index-1,:], 
+            visual_embeddings.half().to(self.in_device), 
+            vectorized_messages[:,first_eos_index:,:]],dim=1)
+
         #combined_embeds = torch.cat([self.input_emb, self.eot_emb],dim=1)
         self.cache = OffloadedCache()
         
