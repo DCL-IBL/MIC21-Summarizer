@@ -10,7 +10,7 @@ from mic21s import MIC21Summarizer
 
 from datasets import load_dataset
 import numpy as np
-import tqdm
+from tqdm import tqdm
 
 cuda_id = 0
 device_map = "auto"

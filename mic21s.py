@@ -8,7 +8,7 @@ import random
 
 import matplotlib.pyplot as plt
 
-from transformers import OffloadedCache
+from transformers import OffloadedCache,DynamicCache
 
 class MIC21Summarizer(torch.nn.Module):
     def __init__(self,cuda_id,device_map):
@@ -41,7 +41,7 @@ class MIC21Summarizer(torch.nn.Module):
             device_map="auto",
             #max_memory={1: "5GiB",2: "5GiB",},
             torch_dtype=torch.float16,
-            attn_implementation="eager"
+            #attn_implementation="eager"
         )
         self.tokenizer = AutoTokenizer.from_pretrained(self.llm_name)
 
@@ -92,7 +92,8 @@ class MIC21Summarizer(torch.nn.Module):
             vectorized_messages[:,first_eos_index:,:]],dim=1)
 
         #combined_embeds = torch.cat([self.input_emb, self.eot_emb],dim=1)
-        self.cache = OffloadedCache()
+        #self.cache = OffloadedCache()
+        self.cache = DynamicCache()
         
         outputs = self.llm(inputs_embeds=combined_embeds,past_key_values=self.cache,use_cache=True)
         logits = outputs.logits[:,-1]
