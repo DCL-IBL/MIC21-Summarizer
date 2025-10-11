@@ -39,14 +39,14 @@ class MIC21Summarizer(torch.nn.Module):
         self.llm = AutoModelForCausalLM.from_pretrained(
             self.llm_name,
             device_map="auto",
-            max_memory={1: "5GiB",2: "5GiB",},
+            #max_memory={1: "5GiB",2: "5GiB",},
             torch_dtype=torch.float16,
             attn_implementation="eager"
         )
         self.tokenizer = AutoTokenizer.from_pretrained(self.llm_name)
 
-        self.in_device = device_map['model.embed_tokens']
-        self.out_device = device_map['lm_head']
+        self.in_device = 0 #device_map['model.embed_tokens']
+        self.out_device = 0 #device_map['lm_head']
 
         self.projection_layer = torch.nn.Linear(256, self.llm.config.hidden_size, dtype=torch.float, device=f"cuda:{self.in_device}")
         self.projection_norm = torch.nn.LayerNorm(256, eps=1e-5, bias=True, device=f"cuda:{self.in_device}")
@@ -57,24 +57,6 @@ class MIC21Summarizer(torch.nn.Module):
 
         for param in self.llm.parameters():
             param.requires_grad = False
-
-        self.msg_p1 = ("<|start_header_id|>system<|end_header_id|>"
-                       "Generate title and description for the provided image."
-                       "The image features are: ")
-        self.msg_p1_tok = self.tokenizer(self.msg_p1, return_tensors="pt")
-        self.msg_p1_emb = self.llm.model.embed_tokens(self.msg_p1_tok["input_ids"])
-
-        self.msg_p2 = ("<|eot_id|><|start_header_id|>user<|end_header_id|>"
-                       "Generate a title"
-                       "<|eot_id|><|start_header_id|>assistant<|end_header_id|>")
-        self.msg_p2_tok = self.tokenizer(self.msg_p2, return_tensors="pt")
-        self.msg_p2_emb = self.llm.model.embed_tokens(self.msg_p2_tok["input_ids"][:,1:])
-
-        self.msg_p3 = ("<|eot_id|><|start_header_id|>user<|end_header_id|>"
-                       "Generate a description"
-                       "<|eot_id|><|start_header_id|>assistant<|end_header_id|>")
-        self.msg_p3_tok = self.tokenizer(self.msg_p3, return_tensors="pt")
-        self.msg_p3_emb = self.llm.model.embed_tokens(self.msg_p3_tok["input_ids"][:,1:])
 
     def get_img_features(self,img):
         if self.img_predictor.input_format == "RGB":

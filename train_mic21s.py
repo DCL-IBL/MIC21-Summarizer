@@ -16,7 +16,7 @@ device_map = "auto"
 
 model = MIC21Summarizer(cuda_id,device_map)
 
-dataset = load_dataset("mic21_dataset")
+dataset = load_dataset("jkralev/mic21")
 
 domain_name = "cricket"
 
@@ -49,7 +49,7 @@ for epoch in range(num_epochs):
             loss.backward()
             #torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            epoch_loss += loss.item()/len(data_gt[cat].keys())
+            epoch_loss += loss.item()/data_subset.num_rows
             #if ind > 10:
             #break
         loss_hist[cat].append(epoch_loss)
