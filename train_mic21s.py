@@ -10,6 +10,7 @@ from mic21s import MIC21Summarizer
 
 from datasets import load_dataset
 import numpy as np
+import tqdm
 
 cuda_id = 0
 device_map = "auto"
@@ -30,7 +31,7 @@ toggle = False
 for epoch in range(num_epochs):
     for cat in [domain_name]:
         epoch_loss = 0
-        for ind in range(data_subset.num_rows):
+        for ind in tqdm(range(data_subset.num_rows)):
             target_text = data_subset[ind]["title"]
             target_tok = model.tokenizer(target_text, add_special_tokens=False, max_length=128, padding='max_length')
             
