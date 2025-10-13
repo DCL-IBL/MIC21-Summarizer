@@ -15,9 +15,33 @@ from tqdm import tqdm
 cuda_id = 0
 device_map = "auto"
 
+cuda_id = 2
+device_map = torch.load('llama_3_dm.pth')
+device_map['model.embed_tokens'] = 1
+device_map['model.norm'] = 2
+device_map['model.rotary_emb'] = 2
+device_map['lm_head'] = 1
+device_map['model.layers.12'] = 2
+device_map['model.layers.13'] = 2
+device_map['model.layers.14'] = 2
+device_map['model.layers.15'] = 2
+device_map['model.layers.16'] = 2
+device_map['model.layers.17'] = 2
+device_map['model.layers.18'] = 2
+device_map['model.layers.19'] = 2
+device_map['model.layers.20'] = 2
+device_map['model.layers.21'] = 2
+device_map['model.layers.22'] = 2
+device_map['model.layers.23'] = 2
+device_map['model.layers.0'] = 1
+device_map['model.layers.1'] = 1
+device_map['model.layers.2'] = 2
+device_map['model.layers.3'] = 2
+
 model = MIC21Summarizer(cuda_id,device_map)
 
-dataset = load_dataset("jkralev/mic21")
+#dataset = load_dataset("jkralev/mic21")
+dataset = load_dataset("mic21_dataset")
 
 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4)
 num_epochs = 10
@@ -31,13 +55,14 @@ def model_checkpoint():
 
 toggle = False
 avg_loss = 0
-for ind in tqdm(range(dataset["train"].num_rows)):
-    target_text = dataset["train"][ind]["title"]
+batch_size = 3
+dataset_subset = dataset["train"]
+for ind in tqdm(range(0,dataset_subset.num_rows,batch_size)):
+    target_text = dataset_subset[ind:ind+batch_size]["title"]
     target_tok = model.tokenizer(target_text, add_special_tokens=False, max_length=64, padding='max_length')
-            
-    img_np = np.array(dataset["train"][ind]["image"])        # Converts to numpy array in RGB order
-    img_np = img_np[:, :, ::-1]       # Convert RGB to BGR
-    img_np = img_np.astype(np.uint8)  # Ensure dtype is uint8
+    
+    img_np = [np.array(img) for img in dataset_subset[ind:ind+batch_size]["image"]]
+    img_np = [img[:, :, 2::-1].astype(np.uint8) for img in img_np]       # Convert RGB to BGR
             
     out1 = model(img_np,64)
     loss = torch.nn.CrossEntropyLoss()(out1.permute((0,2,1)), torch.tensor(target_tok["input_ids"]).unsqueeze(0).cuda(model.out_device))
