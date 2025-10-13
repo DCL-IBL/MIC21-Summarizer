@@ -64,9 +64,9 @@ for ind in tqdm(range(0,dataset_subset.num_rows,batch_size)):
     img_np = [np.array(img) for img in dataset_subset[ind:ind+batch_size]["image"]]
     img_np = [img[:, :, 2::-1].astype(np.uint8) for img in img_np]       # Convert RGB to BGR
             
-    out1 = model(img_np,64)
-    loss = torch.nn.CrossEntropyLoss()(out1.permute((0,2,1)), torch.tensor(target_tok["input_ids"]).unsqueeze(0).cuda(model.out_device))
-        
+    out1 = model(img_np,63)
+    loss = torch.nn.CrossEntropyLoss()(out1.permute((0,2,1)), torch.LongTensor(target_tok["input_ids"]).cuda(model.out_device))
+    
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
