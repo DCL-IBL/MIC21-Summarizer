@@ -28,9 +28,3 @@ Open and run the provided notebook files to experiment with model inference and 
 
 - Dataset
 A variant of [MIC21 multimodal dataset](https://huggingface.co/datasets/jkralev/mic21) should be accessed  - requires ~20GB of storage
-
-Maintainers
-DCL-IBL Lab
-
-Contact
-For questions or collaboration, open an issue on GitHub.
