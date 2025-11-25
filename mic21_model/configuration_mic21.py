@@ -30,4 +30,7 @@ class MIC21SummarizerConfig(PretrainedConfig):
         self.in_device = in_device
         self.out_device = out_device
         self.output_length = output_length
+        self.auto_map = {
+                "AutoConfig": "jkralev/mic21_model--configuration_mic21.MIC21SummarizerConfig",
+                "AutoModel": "jkralev/mic21_model--modeling_mic21.MIC21SummarizerModel"}
         super().__init__(**kwargs)

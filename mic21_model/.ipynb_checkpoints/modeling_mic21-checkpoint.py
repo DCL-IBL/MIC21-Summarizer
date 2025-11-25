@@ -1,4 +1,4 @@
-from transformers import PreTrainedModel
+from transformers.modeling_utils import PreTrainedModel
 
 import detectron2
 from detectron2 import model_zoo,engine
@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from transformers import OffloadedCache,DynamicCache
 
 from .configuration_mic21 import MIC21SummarizerConfig
+
+import numpy as np
 
 class MIC21SummarizerModel(PreTrainedModel):
     config_class = MIC21SummarizerConfig
@@ -60,28 +62,31 @@ class MIC21SummarizerModel(PreTrainedModel):
         inputs = []
         for img in img_array:
             height, width = img.shape[:2]
-            image = self.img_predictor.aug.get_transform(img).apply_image(img)
+            image = self.components["img_predictor"].aug.get_transform(img).apply_image(img)
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
             image.cuda(self.detectron2_cuda_id)
             inputs.append({"image": image, "height": height, "width": width})
-        images = self.img_predictor.model.preprocess_image(inputs)
-        features = self.img_predictor.model.backbone(images.tensor)
+        images = self.components["img_predictor"].model.preprocess_image(inputs)
+        features = self.components["img_predictor"].model.backbone(images.tensor)
         pooled = torch.nn.AdaptiveAvgPool2d((16,16))(features['p6'])
         batch_size = pooled.shape[0]
         return pooled.view(batch_size,256,256)
         
-    def forward(self, imgs, targets):
-        img_features = self.get_img_features(imgs)
-        batch_size = len(imgs)
+    def forward(self, images, titles):
+        img_np = [np.array(img) for img in images]
+        img_np = [img[:, :, 2::-1].astype(np.uint8) for img in img_np]       # Convert RGB to BGR
+        
+        img_features = self.get_img_features(img_np)
+        batch_size = len(img_np)
 
         messages = [
             {"role":"system","content":"Generate title and description for the provided image. The image features are: "},
             {"role":"user","content":"Generate a title:"}]
         
-        tokenized_messages = self.tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(self.in_device)     
-        vectorized_messages = self.llm.model.embed_tokens(tokenized_messages[0]).unsqueeze(0)
+        tokenized_messages = self.components["tokenizer"].apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(self.in_device)     
+        vectorized_messages = self.components["llm"].model.embed_tokens(tokenized_messages[0]).unsqueeze(0)
         vectorized_messages = vectorized_messages.repeat(batch_size,1,1).to(self.in_device)
-        first_eos_index = (tokenized_messages[0]==self.tokenizer.eos_token_id).nonzero()[0].item()
+        first_eos_index = (tokenized_messages[0]==self.components["tokenizer"].eos_token_id).nonzero()[0].item()
 
         visual_embeddings = self.projection_layer(self.projection_dropout(self.projection_norm(img_features.to(f"cuda:{self.in_device}"))))
         
@@ -94,7 +99,7 @@ class MIC21SummarizerModel(PreTrainedModel):
         self.cache = OffloadedCache()
         #self.cache = DynamicCache()
         
-        outputs = self.llm(inputs_embeds=combined_embeds,past_key_values=self.cache,use_cache=True)
+        outputs = self.components["llm"](inputs_embeds=combined_embeds,past_key_values=self.cache,use_cache=True)
         logits = outputs.logits[:,-1]
         out_logits = logits.unsqueeze(1)
         new_tok = torch.argmax(logits,dim=-1)
@@ -105,17 +110,18 @@ class MIC21SummarizerModel(PreTrainedModel):
             max_len = self.output_length
             
         for k in range(0,max_len):
-            outputs = self.llm(input_ids=new_tok.unsqueeze(0).permute(1,0),past_key_values=self.cache,use_cache=True)
+            outputs = self.components["llm"](input_ids=new_tok.unsqueeze(0).permute(1,0),past_key_values=self.cache,use_cache=True)
             logits = outputs.logits[:,-1]
             if out_logits is None:
                 out_logits = logits.unsqueeze(1)
             else:
                 out_logits = torch.cat([out_logits,logits.unsqueeze(1)],dim=1)
             new_tok = torch.argmax(logits,dim=-1)
-            if target_len is None and new_tok.item() == self.tokenizer.eos_token_id:
+            if target_len is None and new_tok.item() == self.components["tokenizer"].eos_token_id:
                 break
         if targets is not None:
-            loss = torch.nn.CrossEntropyLoss()(out_logits.permute((0,2,1)), torch.LongTensor(targets).cuda(self.out_device))
+            target_tok = model.tokenizer(titles, add_special_tokens=False, max_length=max_len, padding='max_length')
+            loss = torch.nn.CrossEntropyLoss()(out_logits.permute((0,2,1)), torch.LongTensor(target_tok).cuda(self.out_device))
             return {"loss": loss, "logits": logits}
             
         return {"logits":out_logits}
