@@ -19,6 +19,10 @@ import numpy as np
 
 class MIC21SummarizerModel(PreTrainedModel):
     config_class = MIC21SummarizerConfig
+    is_parallelizable = True
+    model_parallel = True
+    place_model_on_device = False
+    model_wrapped = {}
     
     def __init__(self,config):
         super().__init__(config)
@@ -88,7 +92,8 @@ class MIC21SummarizerModel(PreTrainedModel):
         vectorized_messages = vectorized_messages.repeat(batch_size,1,1).to(self.in_device)
         first_eos_index = (tokenized_messages[0]==self.components["tokenizer"].eos_token_id).nonzero()[0].item()
 
-        visual_embeddings = self.projection_layer(self.projection_dropout(self.projection_norm(img_features.to(f"cuda:{self.in_device}"))))
+        img_features = img_features.to(f"cuda:{self.in_device}")
+        visual_embeddings = self.projection_layer(self.projection_dropout(self.projection_norm(img_features)))
         
         combined_embeds = torch.cat([
             vectorized_messages[:,:first_eos_index-1,:], 
@@ -117,11 +122,11 @@ class MIC21SummarizerModel(PreTrainedModel):
             else:
                 out_logits = torch.cat([out_logits,logits.unsqueeze(1)],dim=1)
             new_tok = torch.argmax(logits,dim=-1)
-            if target_len is None and new_tok.item() == self.components["tokenizer"].eos_token_id:
+            if max_len is None and new_tok.item() == self.components["tokenizer"].eos_token_id:
                 break
-        if targets is not None:
-            target_tok = model.tokenizer(titles, add_special_tokens=False, max_length=max_len, padding='max_length')
-            loss = torch.nn.CrossEntropyLoss()(out_logits.permute((0,2,1)), torch.LongTensor(target_tok).cuda(self.out_device))
+        if titles is not None:
+            target_tok = self.components["tokenizer"](titles, add_special_tokens=False, max_length=max_len+1, padding='max_length')
+            loss = torch.nn.CrossEntropyLoss()(out_logits.permute((0,2,1)), torch.LongTensor(target_tok["input_ids"]).cuda(self.out_device))
             return {"loss": loss, "logits": logits}
             
         return {"logits":out_logits}
