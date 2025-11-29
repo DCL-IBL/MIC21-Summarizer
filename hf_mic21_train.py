@@ -13,16 +13,17 @@ def data_collator_1(features):
 training_args = TrainingArguments(
     output_dir="train_chess",
     learning_rate=2e-5,
-    per_device_train_batch_size=96,
-    per_device_eval_batch_size=96,
+    per_device_train_batch_size=1,
+    per_device_eval_batch_size=1,
     num_train_epochs=100,
     weight_decay=0.01,
     eval_strategy="epoch",
     save_strategy="epoch",
-    load_best_model_at_end=False,
+    load_best_model_at_end=True,
     push_to_hub=False,
-    remove_unused_columns=False,
-    metric_for_best_model="eval_runtime",
+    label_names=["titles"]
+    #remove_unused_columns=False,
+    #metric_for_best_model="eval_runtime",
 )
 
 trainer = Trainer(
