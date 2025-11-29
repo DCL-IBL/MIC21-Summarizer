@@ -13,8 +13,8 @@ def data_collator_1(features):
 training_args = TrainingArguments(
     output_dir="train_chess",
     learning_rate=2e-5,
-    per_device_train_batch_size=96,
-    per_device_eval_batch_size=96,
+    per_device_train_batch_size=64,
+    per_device_eval_batch_size=64,
     num_train_epochs=10,
     weight_decay=0.01,
     eval_strategy="epoch",
