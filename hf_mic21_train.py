@@ -21,7 +21,7 @@ training_args = TrainingArguments(
     save_strategy="epoch",
     load_best_model_at_end=True,
     push_to_hub=False,
-    label_names=["titles"]
+    label_names=["titles"],
     remove_unused_columns=False,
     #metric_for_best_model="eval_runtime",
 )
