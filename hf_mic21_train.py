@@ -22,7 +22,7 @@ training_args = TrainingArguments(
     load_best_model_at_end=False,
     push_to_hub=False,
     remove_unused_columns=False,
-    metric_for_best_model="epoch",
+    metric_for_best_model="eval_runtime",
 )
 
 trainer = Trainer(
