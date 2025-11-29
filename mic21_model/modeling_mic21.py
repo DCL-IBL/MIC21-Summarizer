@@ -62,6 +62,7 @@ class MIC21SummarizerModel(PreTrainedModel):
 
         self.im_model_cuda_id = config.im_model_cuda_id
         self.output_length = config.output_length
+        self.can_return_loss = True
         
     def forward(self, images, titles):
         prepared_images = self.components["image_processor"](images,return_tensors="pt")
