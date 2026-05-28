@@ -29,19 +29,13 @@ class MIC21Summarizer(torch.nn.Module):
         self.img_predictor = engine.DefaultPredictor(self.cfg)
 
         #self.quantization_config = BitsAndBytesConfig(load_in_4bit=True,bnb_4bit_compute_dtype=torch.bfloat16)
-        #self.llm = AutoModelForCausalLM.from_pretrained(
-        #    self.llm_name,
-        #    torch_dtype=torch.float16,
-        #    device_map=device_map,
-        #    attn_implementation="eager",
-        #    quantization_config=self.quantization_config)
-        #self.llm.gradient_checkpointing_enable()
         self.llm = AutoModelForCausalLM.from_pretrained(
             self.llm_name,
             device_map="auto",
-            max_memory={1: "5GiB",2: "5GiB",},
+            max_memory={0: "3GiB", 1: "3GiB",2: "5GiB",},
             torch_dtype=torch.float16,
-            attn_implementation="eager"
+            attn_implementation="eager",
+            #quantization_config=self.quantization_config
         )
         self.tokenizer = AutoTokenizer.from_pretrained(self.llm_name)
 
@@ -82,7 +76,7 @@ class MIC21Summarizer(torch.nn.Module):
         
         tokenized_messages = self.tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True, return_tensors="pt").to(self.in_device)     
         vectorized_messages = self.llm.model.embed_tokens(tokenized_messages[0]).unsqueeze(0)
-        vectorized_messages = vectorized_messages.repeat(batch_size,1,1)
+        vectorized_messages = vectorized_messages.repeat(batch_size,1,1).to(self.in_device)
         first_eos_index = (tokenized_messages[0]==2).nonzero()[0].item()
 
         visual_embeddings = self.projection_layer(self.projection_dropout(self.projection_norm(img_features.to(f"cuda:{self.in_device}"))))

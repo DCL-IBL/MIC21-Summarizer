@@ -46,25 +46,43 @@ dataset = load_dataset("mic21_dataset")
 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4)
 num_epochs = 10
 
-loss_hist = []
+def load_checkpoint():
+    model.projection_layer.load_state_dict(torch.load('model_base_title_1.pth'))
+    model.projection_norm.load_state_dict(torch.load('model_base_title_2.pth'))
+    return torch.load('model_base_title_loss.pth')
 
 def model_checkpoint():
     torch.save(model.projection_layer.state_dict(), f'model_base_title_1.pth')
     torch.save(model.projection_norm.state_dict(), f'model_base_title_2.pth')
     torch.save(loss_hist,f'model_base_title_loss.pth')
 
+try:
+    loss_hist = load_checkpoint()
+    last_loss = loss_hist[-1]
+    last_iter = len(loss_hist)
+    print(f"Checkpoint loaded. Last loss: {last_loss}. Last iter {last_iter}")
+except:
+    print("No previous checkpoint")
+    loss_hist = []
+
 toggle = False
 avg_loss = 0
-batch_size = 3
+batch_size = 7
+seq_len = 40
+counter = 0
 dataset_subset = dataset["train"]
 for ind in tqdm(range(0,dataset_subset.num_rows,batch_size)):
     target_text = dataset_subset[ind:ind+batch_size]["title"]
-    target_tok = model.tokenizer(target_text, add_special_tokens=False, max_length=64, padding='max_length')
+    target_tok = model.tokenizer(target_text, add_special_tokens=False, max_length=seq_len, padding='max_length')
     
     img_np = [np.array(img) for img in dataset_subset[ind:ind+batch_size]["image"]]
-    img_np = [img[:, :, 2::-1].astype(np.uint8) for img in img_np]       # Convert RGB to BGR
-            
-    out1 = model(img_np,63)
+    try:
+        img_np = [img[:, :, 2::-1].astype(np.uint8) for img in img_np]       # Convert RGB to BGR
+    except Exception as e:
+        print(e)
+        continue
+        
+    out1 = model(img_np,seq_len-1)
     loss = torch.nn.CrossEntropyLoss()(out1.permute((0,2,1)), torch.LongTensor(target_tok["input_ids"]).cuda(model.out_device))
     
     optimizer.zero_grad()
@@ -73,9 +91,12 @@ for ind in tqdm(range(0,dataset_subset.num_rows,batch_size)):
     
     loss_hist.append(loss.item())
     avg_loss += loss.item()
-    if ind % 100 == 0: 
+    counter += 1
+    if counter % 100 == 0: 
+        model_checkpoint()
         decoded_text = model.tokenizer.batch_decode(torch.argmax(out1, dim=-1),skip_special_tokens=True)
         print(decoded_text)
-        avg_loss = avg_loss / 100
-        print(f"Epoch {avg_loss}")
-        model_checkpoint()
+        avg_loss = avg_loss / counter
+        print(f"Loss: {avg_loss}")
+        avg_loss = 0
+        counter = 0
